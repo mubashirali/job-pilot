@@ -1,0 +1,33 @@
+# ── Credentials & secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+credentials.json
+token.json
+*.pem
+*.key
+*.p12
+*.pfx
+service-account*.json
+
+# ── Personal data (never commit — add your own copies locally) ────────────────
+data/
+
+# ── Generated / temporary files ───────────────────────────────────────────────
+.tmp/
+*.pdf
+
+# ── Python ────────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# ── IDE & OS ──────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
