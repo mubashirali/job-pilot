@@ -18,10 +18,12 @@ Screenshots are saved to .tmp/screenshots/ and paths are printed on exit.
 """
 
 import argparse
+import asyncio
 import logging
 import os
 import re
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -141,8 +143,8 @@ def apply_generic(page, applicant: dict, cover_letter: str, mode: str, screensho
     try:
         from browser_use import Agent
         from langchain_anthropic import ChatAnthropic
-        import asyncio
 
+        # Applicant values come from load_applicant() — a trusted hardcoded source.
         task_prompt = f"""
 You are filling out a job application form. The page is already open.
 
@@ -158,19 +160,34 @@ Fill in the following fields wherever they appear on the page:
 Upload the resume from: {applicant.get('resume_path')}
 
 If there is a cover letter field, paste this text:
-{cover_letter[:500]}...
+{cover_letter}
 
 {"Do NOT click the final submit button." if mode == "preview" else "After filling all fields, click the submit button."}
-
-Take a screenshot when done.
 """
         llm = ChatAnthropic(model="claude-sonnet-4-6")
-        # Note: browser-use Agent manages its own browser session.
-        # It does NOT accept a `page` parameter — it opens a fresh browser internally.
+        # browser-use Agent manages its own browser session — no `page` argument.
         agent = Agent(task=task_prompt, llm=llm)
 
-        asyncio.run(agent.run())
-        print("[generic] browser-use AI fill complete.")
+        # Run agent in a dedicated thread with its own event loop to avoid
+        # conflicting with Playwright's internal asyncio event loop.
+        exc_holder: list[Exception] = []
+
+        def _run_agent() -> None:
+            try:
+                asyncio.run(agent.run())
+            except Exception as e:
+                exc_holder.append(e)
+
+        t = threading.Thread(target=_run_agent, daemon=True)
+        t.start()
+        t.join(timeout=300)  # 5-minute cap
+        if t.is_alive():
+            logger.warning("browser-use timed out after 300s")
+            print("[generic] browser-use timed out. Taking screenshot for manual review.")
+        elif exc_holder:
+            raise exc_holder[0]
+        else:
+            print("[generic] browser-use AI fill complete.")
 
     except ImportError:
         logger.warning("browser-use not installed — falling back to screenshot only.")
@@ -179,15 +196,16 @@ Take a screenshot when done.
         logger.warning(f"browser-use failed: {e} — falling back to screenshot.")
         print(f"[generic] browser-use error: {e}. Taking screenshot for manual review.")
 
+    # Screenshot the original Playwright page (not the browser-use session, which is separate).
     shot = f"{screenshot_dir}/generic_{ts}_unknown_ats.png"
     page.screenshot(path=shot, full_page=True)
     screenshots.append(shot)
-    print(f"[generic] Screenshot: {shot}")
+    print(f"[generic] Screenshot (original page): {shot}")
 
     if mode == "preview":
-        print("[generic] PREVIEW complete. Review screenshot above.")
+        print("[generic] PREVIEW complete. Review screenshot above (browser-use ran in its own session).")
     else:
-        print("[generic] If browser-use filled the form, check the screenshot to confirm submission.")
+        print("[generic] SUBMIT attempted. Verify submission in browser-use logs — screenshot shows the original page, not the browser-use session.")
 
     return screenshots
 
