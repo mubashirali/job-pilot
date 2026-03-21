@@ -65,19 +65,26 @@ MULTI_STEP_WARNINGS = {
 
 
 def detect_ats(url: str, override: str | None = None) -> tuple[str, bool | None]:
-    """Return (ats_type, multi_step). Override takes precedence."""
+    """Return (ats_type, multi_step). Override takes precedence.
+
+    Delegates to browser_apply.detect_ats for URL matching (single source of truth),
+    then maps to multi_step flag and normalises 'stripe' → 'greenhouse'.
+    """
     if override:
         return override, override in ("greenhouse", "workday")
-    patterns = [
-        (r"greenhouse\.io|grnh\.se",           "greenhouse", True),
-        (r"workday\.com|myworkdayjobs\.com",   "workday",    True),
-        (r"ashbyhq\.com",                       "ashby",      False),
-        (r"lever\.co",                          "lever",      False),
-    ]
-    for pattern, ats, multi_step in patterns:
-        if re.search(pattern, url, re.IGNORECASE):
-            return ats, multi_step
-    return "unknown", None
+
+    from modules.apply.browser_apply import detect_ats as _ba_detect
+    ats = _ba_detect(url)  # uses the full ATS_PATTERNS from browser_apply (incl. stripe)
+
+    # Map browser_apply ATS names to inspector types + multi_step flag
+    mapping: dict[str, tuple[str, bool | None]] = {
+        "greenhouse": ("greenhouse", True),
+        "stripe":     ("greenhouse", True),   # Stripe uses Greenhouse
+        "workday":    ("workday",    True),
+        "ashby":      ("ashby",      False),
+        "lever":      ("lever",      False),
+    }
+    return mapping.get(ats, ("unknown", None))
 
 
 def find_file(pattern: str) -> str | None:
@@ -479,14 +486,23 @@ def main() -> None:
             print(f"[form_inspector] Screenshot: {screenshot_path}")
 
             print(f"[form_inspector] Extracting fields (ATS: {ats_type}) ...")
-            fields = extract_fields(page, ats_type, applicant, slug_co, slug_pos)
-            browser.close()
+            try:
+                fields = extract_fields(page, ats_type, applicant, slug_co, slug_pos)
+            finally:
+                browser.close()
 
     except Exception as exc:
         result["error"] = str(exc)
         logger.error(f"Fatal: {exc}")
         out_path.write_text(json.dumps(result, indent=2))
         print(f"\n[form_inspector] FATAL ERROR: {exc}")
+        print(f"[form_inspector] Output: {out_path}")
+        sys.exit(2)
+
+    if not fields:
+        result["error"] = "No form fields found — page may not have loaded correctly or bot detection is active"
+        out_path.write_text(json.dumps(result, indent=2))
+        print(f"\n[form_inspector] FATAL: No fields found. Check screenshot: {screenshot_path}")
         print(f"[form_inspector] Output: {out_path}")
         sys.exit(2)
 
