@@ -45,7 +45,7 @@ python modules/apply/form_inspector.py \
   --position "<Position>"
 ```
 
-Read the output from `.tmp/form_fields_<slug>.json`.
+Read the output from `.tmp/form_fields_<company-slug>_<position-slug>_<YYYY-MM-DD>.json`.
 
 - **Exit code 0** — all fields resolved. Proceed to Step 2.
 - **Exit code 1** — unresolved fields found. Review `unresolved_labels` with the user, get their
@@ -88,10 +88,15 @@ Read all screenshots from `.tmp/screenshots/` using the Read tool and show them 
 
 ## Step 3 — Review Screenshots
 
-Review screenshots from `.tmp/screenshots/` — check that every field is filled correctly.
+Review screenshots from `.tmp/screenshots/` and present them to the user. Ask:
+- Does the filled form look correct?
+- Any fields to fix before submitting?
+
 If any field is wrong or missing:
 - Fix the answer in `data/application-defaults.md` or `data/about-me.md`
 - Re-run Step 2 before submitting
+
+If any unresolved field is **required** and the user cannot provide an answer, do not proceed to Step 4 — stop and log the application as `In Progress`.
 
 ---
 
