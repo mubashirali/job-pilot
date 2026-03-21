@@ -1,7 +1,8 @@
 """
 scrape_linkedin_jobs.py — Search LinkedIn Jobs for matching roles.
 
-Uses Crawl4AI with headless browser. LinkedIn rate-limits heavily — use sparingly.
+Uses Crawl4AI with headless browser. A single browser session is reused across all
+queries. LinkedIn rate-limits heavily — use sparingly (once per session).
 
 Usage:
     python modules/search/scrape_linkedin_jobs.py [--query "Senior Java Engineer Remote"]
@@ -39,7 +40,7 @@ DEFAULT_QUERIES = [
 ]
 
 SENIOR_KEYWORDS  = ["senior", "lead", "staff", "principal"]
-EXCLUDE_KEYWORDS = ["junior", "intern", "qa", "data scientist", "product manager"]
+EXCLUDE_KEYWORDS = ["junior", "intern", "qa", "data scientist", "product manager", "devops"]
 ROLE_KEYWORDS    = ["engineer", "developer", "architect"]
 STACK_KEYWORDS   = ["java", "kotlin", "spring", "microservice", "distributed", "aws", "backend"]
 
@@ -60,48 +61,56 @@ def build_search_url(query: str) -> str:
     )
 
 
-async def scrape_query(query: str) -> list[dict]:
-    from crawl4ai import AsyncWebCrawler
+async def scrape_query(crawler, query: str) -> list[dict]:
+    """Run one LinkedIn search query using an existing crawler session."""
     url = build_search_url(query)
     jobs = []
     try:
-        async with AsyncWebCrawler(headless=True) as crawler:
-            result = await crawler.arun(url=url, timeout=45, delay_before_return_html=3.0)
-            if not result.success:
-                logger.warning(f"LinkedIn scrape failed for '{query}': {result.error_message}")
-                return []
-            for match in re.finditer(
-                r"\[([^\]]+)\]\((https://www\.linkedin\.com/jobs/view/[^\)]+)\)",
-                result.markdown,
-            ):
-                title, job_url = match.group(1).strip(), match.group(2)
-                if is_relevant_title(title):
-                    stack = [k for k in STACK_KEYWORDS if k in title.lower()]
-                    jobs.append({
-                        "company":        "",
-                        "title":          title,
-                        "url":            job_url,
-                        "location":       "Remote",
-                        "stack_keywords": stack,
-                    })
+        result = await crawler.arun(url=url, timeout=45, delay_before_return_html=3.0)
+        if not result.success:
+            logger.warning(f"LinkedIn scrape failed for '{query}': {result.error_message}")
+            return []
+        markdown = result.markdown or ""
+        for match in re.finditer(
+            r"\[([^\]]+)\]\((https://www\.linkedin\.com/jobs/view/[^\)]+)\)",
+            markdown,
+        ):
+            title, job_url = match.group(1).strip(), match.group(2)
+            if is_relevant_title(title):
+                # Check stack keywords against surrounding context (200 chars), not just title
+                start = max(0, match.start() - 100)
+                end = min(len(markdown), match.end() + 100)
+                context = markdown[start:end].lower()
+                stack = [k for k in STACK_KEYWORDS if k in context]
+                jobs.append({
+                    "company":        "",   # Company name requires clicking into job card
+                    "title":          title,
+                    "url":            job_url,
+                    "location":       "Remote",
+                    "stack_keywords": stack,
+                })
     except Exception as e:
         logger.warning(f"Error scraping LinkedIn for '{query}': {e}")
     return jobs
 
 
 async def main_async(queries: list[str]) -> None:
+    from crawl4ai import AsyncWebCrawler
+
     all_jobs: list[dict] = []
     seen_urls: set[str] = set()
 
-    for query in queries:
-        logger.info(f"Searching LinkedIn: '{query}' ...")
-        jobs = await scrape_query(query)
-        for job in jobs:
-            if job["url"] not in seen_urls:
-                seen_urls.add(job["url"])
-                all_jobs.append(job)
-        logger.info(f"  {len(jobs)} results (running total: {len(all_jobs)})")
-        await asyncio.sleep(5)
+    # Single browser session shared across all queries — more natural browsing pattern
+    async with AsyncWebCrawler(headless=True) as crawler:
+        for query in queries:
+            logger.info(f"Searching LinkedIn: '{query}' ...")
+            jobs = await scrape_query(crawler, query)
+            for job in jobs:
+                if job["url"] not in seen_urls:
+                    seen_urls.add(job["url"])
+                    all_jobs.append(job)
+            logger.info(f"  {len(jobs)} results (running total: {len(all_jobs)})")
+            await asyncio.sleep(5)  # polite delay between queries
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     out_path = ROOT / ".tmp" / f"linkedin_jobs_{date_str}.json"
@@ -114,8 +123,12 @@ async def main_async(queries: list[str]) -> None:
 
 def main() -> None:
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--query", default=None)
+    parser = argparse.ArgumentParser(description="Scrape LinkedIn Jobs for matching senior engineering roles")
+    parser.add_argument(
+        "--query",
+        default=None,
+        help="Single search query (default: runs all DEFAULT_QUERIES)",
+    )
     args = parser.parse_args()
     queries = [args.query] if args.query else DEFAULT_QUERIES
     asyncio.run(main_async(queries))

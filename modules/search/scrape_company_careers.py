@@ -1,7 +1,8 @@
 """
 scrape_company_careers.py — Scrape direct company career pages for matching roles.
 
-Uses Crawl4AI for JS-rendered pages.
+Uses Crawl4AI for JS-rendered pages. A single browser session is reused across all
+companies to avoid per-URL browser launch overhead.
 
 Usage:
     python modules/search/scrape_company_careers.py
@@ -37,7 +38,7 @@ CAREER_PAGES = [
 ]
 
 SENIOR_KEYWORDS  = ["senior", "lead", "staff", "principal"]
-EXCLUDE_KEYWORDS = ["junior", "intern", "qa", "data scientist", "product manager"]
+EXCLUDE_KEYWORDS = ["junior", "intern", "qa", "data scientist", "product manager", "devops"]
 ROLE_KEYWORDS    = ["engineer", "developer", "architect"]
 STACK_KEYWORDS   = ["java", "kotlin", "spring", "microservice", "distributed", "aws", "backend"]
 
@@ -51,38 +52,46 @@ def is_relevant_title(title: str) -> bool:
     return any(k in t for k in ROLE_KEYWORDS)
 
 
-async def scrape_page(company: str, url: str) -> list[dict]:
-    from crawl4ai import AsyncWebCrawler
+async def scrape_page(crawler, company: str, url: str) -> list[dict]:
+    """Scrape one career page using an existing crawler session."""
     jobs = []
     try:
-        async with AsyncWebCrawler(headless=True) as crawler:
-            result = await crawler.arun(url=url, timeout=30)
-            if not result.success:
-                logger.warning(f"Failed to scrape {company}: {result.error_message}")
-                return []
-            for match in re.finditer(r"\[([^\]]+)\]\((https?://[^\)]+)\)", result.markdown):
-                title, job_url = match.group(1), match.group(2)
-                if is_relevant_title(title):
-                    stack = [k for k in STACK_KEYWORDS if k in title.lower()]
-                    jobs.append({
-                        "company":        company,
-                        "title":          title,
-                        "url":            job_url,
-                        "location":       "",
-                        "stack_keywords": stack,
-                    })
+        result = await crawler.arun(url=url, timeout=30)
+        if not result.success:
+            logger.warning(f"Failed to scrape {company}: {result.error_message}")
+            return []
+        markdown = result.markdown or ""
+        for match in re.finditer(r"\[([^\]]+)\]\((https?://[^\)]+)\)", markdown):
+            title, job_url = match.group(1), match.group(2)
+            if is_relevant_title(title):
+                # Check stack keywords against surrounding markdown context (200 chars), not just title
+                start = max(0, match.start() - 100)
+                end = min(len(markdown), match.end() + 100)
+                context = markdown[start:end].lower()
+                stack = [k for k in STACK_KEYWORDS if k in context]
+                jobs.append({
+                    "company":        company,
+                    "title":          title,
+                    "url":            job_url,
+                    "location":       "",
+                    "stack_keywords": stack,
+                })
     except Exception as e:
         logger.warning(f"Error scraping {company}: {e}")
     return jobs
 
 
 async def main_async() -> None:
+    from crawl4ai import AsyncWebCrawler
+
     all_jobs: list[dict] = []
-    for page_info in CAREER_PAGES:
-        logger.info(f"Scraping {page_info['company']} ...")
-        jobs = await scrape_page(page_info["company"], page_info["url"])
-        logger.info(f"  {len(jobs)} matching roles")
-        all_jobs.extend(jobs)
+    # Single browser session shared across all career pages
+    async with AsyncWebCrawler(headless=True) as crawler:
+        for page_info in CAREER_PAGES:
+            logger.info(f"Scraping {page_info['company']} ...")
+            jobs = await scrape_page(crawler, page_info["company"], page_info["url"])
+            logger.info(f"  {len(jobs)} matching roles")
+            all_jobs.extend(jobs)
 
     date_str = datetime.now().strftime("%Y-%m-%d")
     out_path = ROOT / ".tmp" / f"company_careers_{date_str}.json"

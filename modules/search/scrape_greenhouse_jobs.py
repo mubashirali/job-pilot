@@ -47,7 +47,7 @@ GREENHOUSE_COMPANIES = {
 }
 
 SENIOR_KEYWORDS   = ["senior", "lead", "staff", "principal"]
-EXCLUDE_KEYWORDS  = ["junior", "intern", "qa ", "data scientist", "product manager", "devops"]
+EXCLUDE_KEYWORDS  = ["junior", "intern", "qa", "data scientist", "product manager", "devops"]
 ROLE_KEYWORDS     = ["engineer", "developer", "architect"]
 STACK_KEYWORDS    = ["java", "kotlin", "spring", "microservice", "distributed", "aws", "backend"]
 
@@ -106,6 +106,9 @@ def main() -> None:
     if args.companies:
         names = [n.strip() for n in args.companies.split(",")]
         target = {k: v for k, v in GREENHOUSE_COMPANIES.items() if k in names}
+        unrecognised = [n for n in names if n not in GREENHOUSE_COMPANIES]
+        for name in unrecognised:
+            logger.warning(f"Unrecognised company name '{name}' — not in GREENHOUSE_COMPANIES. Check spelling.")
 
     all_jobs: list[dict] = []
     for company_name, board_slug in target.items():
