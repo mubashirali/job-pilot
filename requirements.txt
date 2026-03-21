@@ -5,3 +5,4 @@ google-api-python-client==2.126.0
 python-dotenv==1.0.1
 playwright==1.44.0
 fpdf2==2.7.9
+crawl4ai==0.4.247

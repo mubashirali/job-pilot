@@ -25,7 +25,7 @@ Run searches across all of the following in each session:
 ### 1. LinkedIn Jobs
 - URL: https://www.linkedin.com/jobs/
 - Filters: Remote | United States | Posted in last 7 days | Experience: Senior level
-- Use tool: `tools/scrape_linkedin_jobs.py`
+- Use tool: `modules/search/scrape_linkedin_jobs.py`
 - Search queries to run:
   - "Senior Software Engineer Java Remote"
   - "Lead Backend Engineer Spring Boot Remote"
@@ -36,7 +36,7 @@ Run searches across all of the following in each session:
 ### 2. Indeed
 - URL: https://www.indeed.com/
 - Filters: Remote | Full-time | Posted in last 7 days
-- Use tool: `tools/scrape_indeed_jobs.py`
+- Use tool: `modules/search/scrape_linkedin_jobs.py`
 - Search queries to run:
   - "Senior Software Engineer Java Remote"
   - "Lead Backend Engineer Remote"
@@ -47,7 +47,7 @@ Run searches across all of the following in each session:
 - Greenhouse is used by many tech companies. Search via:
   - https://boards.greenhouse.io/ (company-specific boards)
   - Aggregate via: https://www.greenhouse.io/job-board
-- Use tool: `tools/scrape_greenhouse_jobs.py`
+- Use tool: `modules/search/scrape_greenhouse_jobs.py`
 - Target companies known to use Greenhouse: Stripe, Brex, Plaid, Rippling, Chime, Robinhood, etc.
 
 ### 4. Company Career Pages (Direct)
@@ -68,7 +68,7 @@ Check these high-priority companies directly each run:
 | Marqeta       | https://www.marqeta.com/company/careers              | Payments, card issuing |
 | Mercury       | https://mercury.com/jobs                             | Fintech banking |
 
-- Use tool: `tools/scrape_company_careers.py`
+- Use tool: `modules/search/scrape_company_careers.py`
 
 ### 5. Other Portals
 - **Wellfound (AngelList):** https://wellfound.com/jobs — strong for startups
@@ -77,7 +77,6 @@ Check these high-priority companies directly each run:
 - **Dice:** https://www.dice.com/ — strong for tech/engineering roles in the US
 - **Remotive:** https://remotive.com/ — remote-only roles
 - **We Work Remotely:** https://weworkremotely.com/
-- Use tool: `tools/scrape_other_portals.py`
 
 ## Filtering Criteria
 
