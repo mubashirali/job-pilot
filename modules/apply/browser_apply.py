@@ -2,7 +2,7 @@
 browser_apply.py — Browser automation entry point for job applications.
 
 Usage:
-    python tools/browser_apply.py \\
+    python modules/apply/browser_apply.py \\
         --url "https://job-boards.greenhouse.io/affirm/jobs/7471141003" \\
         --cover-letter ".tmp/cover_letter_Affirm_MerchantInterfaces_2026-03-04.md" \\
         --company "Affirm" \\

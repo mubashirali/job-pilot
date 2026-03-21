@@ -80,7 +80,8 @@ ATS detection is automatic from the URL. Supported ATS:
 - **Workday** — full automation (requires WORKDAY_EMAIL + WORKDAY_PASSWORD in .env for account-creation gates)
 - **Stripe** — full automation (Greenhouse-based)
 - **Ashby** — full automation
-- **Lever / LinkedIn** — screenshot only (stubs)
+- **Lever** — full automation
+- **LinkedIn** — screenshot only (stub)
 
 Read all screenshots from `.tmp/screenshots/` using the Read tool and show them to the user.
 
@@ -147,7 +148,7 @@ If the user decides not to apply after seeing the preview:
 
 | Situation | Action |
 |-----------|--------|
-| ATS not supported (Lever, LinkedIn) | Provide cover letter + fields for manual paste; log as `In Progress` |
+| ATS not supported (LinkedIn) | Provide cover letter + fields for manual paste; log as `In Progress` |
 | Workday account-creation gate | Set WORKDAY_EMAIL + WORKDAY_PASSWORD in .env and retry |
 | CAPTCHA encountered | Stop, screenshot, ask user to complete manually |
 | Salary field required | Use "Negotiable / Market rate" unless user specifies |
