@@ -70,7 +70,7 @@ def _fill_by_label(page, label_texts: list[str], value: str, label: str = "") ->
 
 
 def _fill_textarea(page, label_keyword: str, value: str) -> bool:
-    """Find a textarea whose associated label contains label_keyword and fill it."""
+    """Find an EMPTY textarea whose associated label contains label_keyword and fill it."""
     if not value:
         return False
     try:
@@ -81,6 +81,12 @@ def _fill_textarea(page, label_keyword: str, value: str) -> bool:
                 if lbl_for:
                     ta = page.locator(f"textarea#{lbl_for}, #{lbl_for}")
                     if ta.count() > 0:
+                        try:
+                            current = ta.first.input_value() or ""
+                            if current.strip():
+                                continue
+                        except Exception:
+                            pass
                         ta.first.scroll_into_view_if_needed()
                         ta.first.triple_click()
                         ta.first.fill(value)
@@ -155,12 +161,31 @@ def apply(page, applicant: dict, cover_letter: str, mode: str, screenshot_dir: s
     resume_path = applicant.get("resume_path", "")
     if resume_path and Path(resume_path).exists():
         try:
-            file_input = page.locator("input[type=file]").first
-            if file_input.count() > 0:
-                file_input.set_input_files(resume_path)
-                page.wait_for_timeout(1500)
-                print(f"[lever] Uploaded resume: {resume_path}")
-            else:
+            # Try clicking an upload trigger to reveal hidden file inputs
+            for trigger_text in ("Upload", "Attach", "Choose file", "Select file", "Add resume", "Browse"):
+                try:
+                    btn = page.get_by_role("button", name=trigger_text, exact=False)
+                    if btn.count() > 0 and btn.first.is_visible():
+                        btn.first.click()
+                        page.wait_for_timeout(800)
+                        break
+                except Exception:
+                    pass
+
+            uploaded = False
+            for sel in ('input[type="file"]', 'input[name="resume"]', 'input[accept*="pdf"]'):
+                try:
+                    el = page.locator(sel)
+                    if el.count() > 0:
+                        el.first.set_input_files(resume_path)
+                        page.wait_for_timeout(1500)
+                        print(f"[lever] Uploaded resume: {resume_path}")
+                        uploaded = True
+                        break
+                except Exception as e:
+                    logger.warning(f"Resume upload via '{sel}' failed: {e}")
+
+            if not uploaded:
                 logger.warning("No file input found for resume")
         except Exception as e:
             logger.warning(f"Resume upload failed: {e}")
@@ -171,7 +196,7 @@ def apply(page, applicant: dict, cover_letter: str, mode: str, screenshot_dir: s
     _fill_textarea(page, "cover letter", cover_letter)
 
     # --- Additional info textarea (common in Lever forms) ---
-    for keyword in ["additional information", "anything else", "why"]:
+    for keyword in ["additional information", "anything else"]:
         if _fill_textarea(page, keyword, cover_letter):
             break  # Only fill the first matching textarea
 
