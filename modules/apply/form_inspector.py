@@ -153,7 +153,7 @@ def resolve_answer(
                                                                   _derive_years_experience(applicant), "derived"),
         (["authorized to work", "work authorization", "eligible to work", "legally authorized"],
                                                                   "Yes",                          "application-defaults.md"),
-        (["require.*sponsor", "sponsorship", "visa sponsor", "need.*sponsor"],
+        (["require sponsorship", "sponsorship", "visa sponsor", "need sponsorship"],
                                                                   "No",                           "application-defaults.md"),
         (["salary", "compensation", "pay expectation", "desired pay", "expected salary"],
                                                                   _resolve_salary(options),       "application-defaults.md"),
