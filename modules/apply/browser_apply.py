@@ -126,17 +126,70 @@ def load_cover_letter(path: str) -> str:
 # ---------------------------------------------------------------------------
 
 def apply_generic(page, applicant: dict, cover_letter: str, mode: str, screenshot_dir: str) -> list[str]:
-    """Fallback for unknown ATS — take screenshot and alert user."""
-    logger.warning("Unknown ATS — screenshot only. Manual application required.")
-    print("[generic] Unknown ATS detected. Taking screenshot for manual review.")
+    """
+    Fallback for unknown ATS platforms.
+
+    Attempts browser-use AI-driven form fill. Falls back to screenshot-only if
+    browser-use is not installed or the attempt fails.
+    """
+    logger.warning("Unknown ATS — attempting browser-use AI fallback.")
+    print("[generic] Unknown ATS detected. Trying browser-use AI fallback ...")
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    page.wait_for_load_state("networkidle", timeout=30000)
-    shot = f"{screenshot_dir}/generic_{ts}_manual_required.png"
+    screenshots: list[str] = []
+
+    try:
+        from browser_use import Agent
+        from langchain_anthropic import ChatAnthropic
+        import asyncio
+
+        task_prompt = f"""
+You are filling out a job application form. The page is already open.
+
+Fill in the following fields wherever they appear on the page:
+- Full name: {applicant.get('full_name')}
+- Email: {applicant.get('email')}
+- Phone: {applicant.get('phone')}
+- LinkedIn: {applicant.get('linkedin')}
+- Current company: {applicant.get('current_company')}
+- Work authorized in US: Yes
+- Requires visa sponsorship: No
+
+Upload the resume from: {applicant.get('resume_path')}
+
+If there is a cover letter field, paste this text:
+{cover_letter[:500]}...
+
+{"Do NOT click the final submit button." if mode == "preview" else "After filling all fields, click the submit button."}
+
+Take a screenshot when done.
+"""
+        llm = ChatAnthropic(model="claude-sonnet-4-6")
+        # Note: browser-use Agent manages its own browser session.
+        # It does NOT accept a `page` parameter — it opens a fresh browser internally.
+        agent = Agent(task=task_prompt, llm=llm)
+
+        asyncio.run(agent.run())
+        print("[generic] browser-use AI fill complete.")
+
+    except ImportError:
+        logger.warning("browser-use not installed — falling back to screenshot only.")
+        print("[generic] browser-use not installed. Taking screenshot for manual review.")
+    except Exception as e:
+        logger.warning(f"browser-use failed: {e} — falling back to screenshot.")
+        print(f"[generic] browser-use error: {e}. Taking screenshot for manual review.")
+
+    shot = f"{screenshot_dir}/generic_{ts}_unknown_ats.png"
     page.screenshot(path=shot, full_page=True)
-    print(f"[generic] Screenshot saved: {shot}")
-    print("[generic] This ATS is not yet supported. Please apply manually.")
-    return [shot]
+    screenshots.append(shot)
+    print(f"[generic] Screenshot: {shot}")
+
+    if mode == "preview":
+        print("[generic] PREVIEW complete. Review screenshot above.")
+    else:
+        print("[generic] If browser-use filled the form, check the screenshot to confirm submission.")
+
+    return screenshots
 
 
 # ---------------------------------------------------------------------------

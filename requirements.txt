@@ -6,3 +6,5 @@ python-dotenv==1.0.1
 playwright==1.44.0
 fpdf2==2.7.9
 crawl4ai==0.4.247
+browser-use==0.1.40
+langchain-anthropic==0.3.3
