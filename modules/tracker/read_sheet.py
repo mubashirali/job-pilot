@@ -35,28 +35,27 @@ def main():
     try:
         if args.check_dup:
             company, position = args.check_dup
-            found, tabs = check_duplicate(company, position)
+            found = check_duplicate(company, position)
             if found:
-                print(f"DUPLICATE: '{company}' — '{position}' found in tab(s): {', '.join(tabs)}")
+                print(f"DUPLICATE: '{company}' — '{position}' already in tracker.")
             else:
-                print(f"NOT_FOUND: '{company}' — '{position}' is not in any tab. Safe to apply.")
+                print(f"NOT_FOUND: '{company}' — '{position}' is not in tracker. Safe to apply.")
             return
 
-        rows = get_all_rows(tab=args.tab)
+        rows = get_all_rows()
         if not rows:
             print("Tracker is empty.")
             return
 
-        header, *data = rows
-
         if args.company:
-            data = [r for r in data if r and r[0].strip().lower() == args.company.strip().lower()]
+            rows = [r for r in rows if r.get("Company", "").strip().lower() == args.company.strip().lower()]
 
-        print("\t".join(header))
+        from modules.shared.config import SHEET_COLUMNS
+        headers = SHEET_COLUMNS
+        print("\t".join(headers))
         print("-" * 80)
-        for row in data:
-            padded = row + [""] * (6 - len(row))
-            print("\t".join(padded[:6]))
+        for row in rows:
+            print("\t".join(str(row.get(h, "")) for h in headers))
 
         print(f"\n{len(data)} row(s) found.")
 
