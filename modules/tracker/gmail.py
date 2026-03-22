@@ -63,8 +63,10 @@ def _get_gmail_service():
 # Security code extraction
 # ---------------------------------------------------------------------------
 
-# Greenhouse verification codes are always exactly 6 digits
-_CODE_RE = re.compile(r"\b(\d{6})\b")
+# Greenhouse delivers codes as 8-char alphanumeric strings in <h1> tags.
+# Fallback: some ATS use 4–8 digit numeric codes.
+_CODE_H1_RE = re.compile(r"<h\d[^>]*>([A-Za-z0-9]{4,12})</h\d>", re.IGNORECASE)
+_CODE_DIGIT_RE = re.compile(r"\b(\d{6})\b")
 
 # Email subjects that indicate a verification/code email
 _VERIFY_SUBJECT_RE = re.compile(
@@ -74,12 +76,20 @@ _VERIFY_SUBJECT_RE = re.compile(
 
 
 def _extract_code_from_text(text: str) -> str | None:
-    """Return the first 6-digit code found in text, or None.
+    """Extract a security code from email text (HTML or plain text).
 
-    Only matches exactly 6 consecutive digits to avoid false positives from
-    years (2026), phone numbers, or other numeric content in email footers.
+    Strategy (in order):
+    1. Look for short alphanumeric content inside <h1>–<h6> tags — this is
+       how Greenhouse delivers its codes (e.g. <h1>nhUwulsn</h1>).
+    2. Fall back to a standalone 6-digit number for numeric-code ATS.
     """
-    for match in _CODE_RE.finditer(text):
+    for match in _CODE_H1_RE.finditer(text):
+        candidate = match.group(1).strip()
+        # Exclude obvious non-codes: pure numbers that look like years/phone
+        if candidate.isdigit() and len(candidate) not in (5, 6, 7, 8):
+            continue
+        return candidate
+    for match in _CODE_DIGIT_RE.finditer(text):
         return match.group(1)
     return None
 
