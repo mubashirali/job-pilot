@@ -204,6 +204,32 @@ def _fill_typeahead_combobox(
     return False
 
 
+def _answer_yes_no_question(page, question_keywords: list, answer: str, field_name: str = "") -> bool:
+    """
+    Answer a Yes/No question rendered as <fieldset class="checkbox"> where the
+    question text is in <legend> and the checkboxes are labeled "Yes" / "No".
+    Uses fieldset.filter(has_text=keyword) to scope the search, then
+    get_by_label(answer, exact=True) to find and click the right checkbox.
+    """
+    for keyword in question_keywords:
+        try:
+            fieldsets = page.locator("fieldset.checkbox").filter(has_text=keyword)
+            if fieldsets.count() == 0:
+                continue
+            fieldset = fieldsets.first
+            cb = fieldset.get_by_label(answer, exact=True)
+            if cb.count() > 0:
+                if not cb.first.is_checked():
+                    cb.first.click()
+                    page.wait_for_timeout(100)
+                logger.debug(f"Answered Yes/No '{field_name}' = '{answer}' via keyword '{keyword}'")
+                return True
+        except Exception as e:
+            logger.warning(f"Error answering Yes/No question '{field_name}': {e}")
+    logger.warning(f"Could not answer Yes/No question '{field_name}'")
+    return False
+
+
 def _check_consent_checkbox(page, label_texts: list, field_name: str = "") -> bool:
     """
     Tick a consent checkbox by finding its associated label text.
@@ -510,6 +536,34 @@ def apply(page, applicant: dict, cover_letter: str, mode: str, screenshot_dir: s
         field_name="requires_sponsorship",
     )
 
+    # Yes/No checkbox fieldsets — some Greenhouse forms render work auth and
+    # company-specific questions as <fieldset class="checkbox"> with Yes/No options
+    # instead of comboboxes. Handle both formats here.
+    _answer_yes_no_question(
+        page,
+        ["legally authorized to work in the United States", "legally authorized to work"],
+        "Yes",
+        "work_authorized_checkbox",
+    )
+    _answer_yes_no_question(
+        page,
+        ["require sponsorship for employment visa", "require visa sponsorship", "require sponsorship"],
+        "No",
+        "requires_sponsorship_checkbox",
+    )
+    _answer_yes_no_question(
+        page,
+        ["currently based in the NYC metro area", "based in the NYC metro"],
+        "No",
+        "nyc_metro_area",
+    )
+    _answer_yes_no_question(
+        page,
+        ["plans to relocate in the next 90 days", "relocate in the next 90"],
+        "No",
+        "relocation_90_days",
+    )
+
     # -----------------------------------------------------------------------
     # 7. US State / Province — combobox, label-based
     # -----------------------------------------------------------------------
@@ -571,7 +625,18 @@ def apply(page, applicant: dict, cover_letter: str, mode: str, screenshot_dir: s
     # Greenhouse consent fields are rendered as EITHER:
     #   a) <input type="checkbox"> — must be clicked (not select_option'd)
     #   b) <select> combobox with options like "I Consent" / "Yes" / "I Agree"
+    #   c) React Select dropdown with a single "Yes" option (e.g. Betterment "I certify")
     # We try the checkbox approach first, fall back to combobox if not found.
+
+    # "I certify that the information provided..." — React Select dropdown (single "Yes" option)
+    _fill_combobox_by_label(
+        page,
+        ["certify that the information provided", "I certify"],
+        "Yes",
+        try_values=["Yes"],
+        field_name="certify_consent",
+    )
+
     CONSENT_FIELDS = [
         ("pre-employment screening",     "I Consent"),
         ("background check",             "I Consent"),
@@ -689,17 +754,32 @@ def apply(page, applicant: dict, cover_letter: str, mode: str, screenshot_dir: s
     # We sweep both. This catches privacy policy, background check, etc.
     # regardless of exact label wording.
     try:
-        # Native checkboxes
-        unchecked = page.locator("input[type='checkbox']:not(:checked)")
-        count = unchecked.count()
-        if count > 0:
-            print(f"[greenhouse] Ticking {count} native unchecked checkbox(es)...")
-            for i in range(count):
+        # Native checkboxes — exclude Yes/No fieldset pairs (handled by _answer_yes_no_question).
+        # Fieldset checkboxes have class="checkbox" on their <fieldset> parent; consent-type
+        # checkboxes do not. We collect IDs via JS to safely filter them out.
+        unchecked_ids = page.evaluate("""() => {
+            var cbs = document.querySelectorAll("input[type='checkbox']:not(:checked)");
+            var ids = [];
+            for (var i = 0; i < cbs.length; i++) {
+                var cb = cbs[i];
+                if (!cb.closest("fieldset.checkbox")) {
+                    ids.push(cb.id || "");
+                }
+            }
+            return ids;
+        }""")
+        if unchecked_ids:
+            print(f"[greenhouse] Ticking {len(unchecked_ids)} consent checkbox(es)...")
+            for cb_id in unchecked_ids:
                 try:
-                    cb = unchecked.nth(i)
-                    cb.scroll_into_view_if_needed()
-                    cb.click()
-                    page.wait_for_timeout(150)
+                    if not cb_id:
+                        continue
+                    # Use attribute selector — safe for IDs with special chars like []
+                    cb = page.locator(f'[id="{cb_id}"]')
+                    if cb.count() > 0:
+                        cb.first.scroll_into_view_if_needed()
+                        cb.first.click()
+                        page.wait_for_timeout(150)
                 except Exception:
                     pass
     except Exception as e:

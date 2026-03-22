@@ -19,7 +19,7 @@ ROOT = Path(__file__).parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from modules.shared.config import CREDENTIALS_PATH, TOKEN_PATH, SCOPES_GMAIL
+from modules.shared.config import CREDENTIALS_PATH, TOKEN_PATH, SCOPES_GMAIL, SCOPES_ALL
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def _get_gmail_service():
     # Try to load existing token; it may already include Gmail scope
     creds = None
     if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES_GMAIL)
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES_ALL)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -51,7 +51,7 @@ def _get_gmail_service():
                     f"credentials.json not found at {CREDENTIALS_PATH}. "
                     "Run modules/shared/auth_google.py to set up OAuth."
                 )
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES_GMAIL)
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES_ALL)
             creds = flow.run_local_server(port=0)
             with open(TOKEN_PATH, "w") as f:
                 f.write(creds.to_json())

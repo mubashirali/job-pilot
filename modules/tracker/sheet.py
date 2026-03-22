@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from modules.shared.config import (
-    CREDENTIALS_PATH, TOKEN_PATH, SCOPES_SHEETS, SHEET_ID, SHEET_TAB, SHEET_COLUMNS
+    CREDENTIALS_PATH, TOKEN_PATH, SCOPES_SHEETS, SCOPES_ALL, SHEET_ID, SHEET_TAB, SHEET_COLUMNS
 )
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ def _get_sheets_service():
 
     creds = None
     if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES_SHEETS)
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES_ALL)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
@@ -55,7 +55,7 @@ def _get_sheets_service():
                     f"credentials.json not found at {CREDENTIALS_PATH}. "
                     "Run modules/shared/auth_google.py to set up OAuth."
                 )
-            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES_SHEETS)
+            flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES_ALL)
             creds = flow.run_local_server(port=0)
             with open(TOKEN_PATH, "w") as f:
                 f.write(creds.to_json())
