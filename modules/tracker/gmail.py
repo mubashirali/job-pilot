@@ -63,12 +63,22 @@ def _get_gmail_service():
 # Security code extraction
 # ---------------------------------------------------------------------------
 
-# Matches 4–8 consecutive digits — covers Greenhouse 6-digit codes and similar
-_CODE_RE = re.compile(r"\b(\d{4,8})\b")
+# Greenhouse verification codes are always exactly 6 digits
+_CODE_RE = re.compile(r"\b(\d{6})\b")
+
+# Email subjects that indicate a verification/code email
+_VERIFY_SUBJECT_RE = re.compile(
+    r"(code|verif|confirm|secur|authentica|one.time|otp)",
+    re.IGNORECASE,
+)
 
 
 def _extract_code_from_text(text: str) -> str | None:
-    """Return the first 4–8 digit code found in text, or None."""
+    """Return the first 6-digit code found in text, or None.
+
+    Only matches exactly 6 consecutive digits to avoid false positives from
+    years (2026), phone numbers, or other numeric content in email footers.
+    """
     for match in _CODE_RE.finditer(text):
         return match.group(1)
     return None
@@ -130,7 +140,7 @@ def fetch_security_code(
             for msg_stub in messages:
                 msg = service.users().messages().get(
                     userId="me",
-                    messageId=msg_stub["id"],
+                    id=msg_stub["id"],
                     format="full",
                 ).execute()
 
@@ -139,10 +149,17 @@ def fetch_security_code(
                 if internal_date_ms // 1000 < after_epoch:
                     continue
 
+                # Check subject line — only extract codes from verification emails
+                headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
+                subject = headers.get("Subject", "")
+                if not _VERIFY_SUBJECT_RE.search(subject):
+                    logger.debug(f"Skipping email (subject not verification-related): {subject!r}")
+                    continue
+
                 body_text = _decode_message_body(msg.get("payload", {}))
                 code = _extract_code_from_text(body_text)
                 if code:
-                    logger.info(f"Security code found: {code}")
+                    logger.info(f"Security code found in '{subject}': {code}")
                     return code
 
         except Exception as e:
